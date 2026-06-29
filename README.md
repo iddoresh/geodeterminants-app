@@ -1,0 +1,132 @@
+# Geodeterminants App
+
+A browser-based tool for enriching a list of addresses with Social Determinants of Health (SDOH) data. Upload a CSV, click Analyze, download your results — no programming required.
+
+Built on the [geodeterminants](https://github.com/wchan05/geodeterminants) R package by Wesley Chan.
+
+---
+
+## What you get
+
+For each address, the tool appends:
+
+| Module | Source |
+|--------|--------|
+| Air Quality Index | EPA Air Quality System |
+| Concentrated Poverty | US Census ACS |
+| Education Attainment | US Census ACS |
+| Environmental Justice Index | EPA EJSCREEN |
+| Retail Food Environment Index (Food Swamp) | USDA Food Environment Atlas |
+| Income Concentration at Extremes (ICE) | US Census ACS |
+| Minimum Wage | State wage databases |
+| Percent Unionized Workforce | BLS |
+| Race/Ethnic Dissimilarity Index | US Census ACS |
+| Race/Ethnic Separation Index | US Census ACS |
+| Decennial Dissimilarity Index | US Census Decennial |
+| Social Vulnerability Index | CDC/ATSDR |
+
+---
+
+## Quick Install
+
+**Prerequisites:** [Docker Desktop](https://docs.docker.com/desktop/) must be installed on your computer. It is free and takes about 5 minutes to install — just download and double-click the installer.
+
+**Step 1 — Get a free Census API key**
+
+Go to [api.census.gov/data/key_signup.html](https://api.census.gov/data/key_signup.html), enter your name and email, and copy the key from the confirmation email. You only need to do this once.
+
+**Step 2 — Start the app**
+
+Open a Terminal (Mac/Linux) or Command Prompt (Windows), navigate to this folder, and run:
+
+```bash
+./install.sh
+```
+
+The first run downloads all dependencies (~5-10 minutes). After that, subsequent starts take about 10 seconds.
+
+**Step 3 — Use the app**
+
+Your browser will open to `http://localhost:3838`. Paste your Census API key when prompted, upload your CSV, and click Analyze.
+
+---
+
+## Input format
+
+Your CSV must have at minimum an address column. The tool auto-detects column names, or you can map them manually in the interface.
+
+| Column | Required | Notes |
+|--------|----------|-------|
+| `address` | Yes | Full street address (e.g. "15 Main St, Flemington, NJ 08822") |
+| `state` | Recommended | 2-letter abbreviation (NJ, CA, TX). Improves geocoding accuracy. |
+| `year` | Recommended | Year of the data (e.g. 2023). Defaults to current year - 2 if not provided. |
+
+Download a [sample CSV](shiny/sample_addresses.csv) from the app interface to see the expected format.
+
+---
+
+## Stopping and restarting
+
+To stop the app:
+```bash
+docker compose down
+```
+
+To restart it later (fast, no rebuild):
+```bash
+docker compose up -d
+```
+
+---
+
+## Interface
+
+```
++------------------------------------------+-------------------------------------+
+|  Geodeterminants                         |                                     |
+|  Social Determinants of Health           |  Welcome to Geodeterminants         |
+|                                          |                                     |
+|  1. Upload your data                     |  Upload a CSV of addresses on the   |
+|  [Choose CSV file]  [Example CSV]        |  left to get started. You will get  |
+|                                          |  back a CSV with 12 SDOH columns    |
+|  2. Map your columns                     |  appended for each address.         |
+|  Address:  [address   v]                 |                                     |
+|  State:    [state     v]                 |  You will receive:                  |
+|  Year:     [year      v]                 |  - Air Quality Index                |
+|                                          |  - Concentrated Poverty             |
+|  3. Population group of interest         |  - Education Attainment             |
+|  Group:    [Black or Afr. American v]    |  - ... (12 total)                   |
+|  Compare:  [White alone (non-Hisp) v]    |                                     |
+|                                          |                                     |
+|  4. Census API key                       |                                     |
+|  [********************]                  |                                     |
+|  [x] Remember key                        |                                     |
+|  Get a free key at api.census.gov        |                                     |
+|                                          |                                     |
+|  [  Analyze Addresses  ]                 |                                     |
++------------------------------------------+-------------------------------------+
+```
+
+---
+
+## Troubleshooting
+
+**"Docker is not running"** — Open Docker Desktop from your Applications folder and wait for the whale icon to appear in the menu bar.
+
+**"Census API key not recognized"** — Check that you copied the full key from the email. Keys are activated within a few hours of signup.
+
+**"Some addresses could not be geocoded"** — Verify your addresses include a city and state. The tool uses the Nominatim geocoder which requires reasonably complete addresses.
+
+**App won't start after first install** — Run `docker compose logs` in the project folder to see error details.
+
+---
+
+## Sharing with others
+
+Anyone with Docker Desktop can run this app:
+
+1. Fork or clone this repository from GitHub
+2. Run `./install.sh`
+3. Enter their Census API key on first use
+
+The key is stored locally on their machine and never leaves it.

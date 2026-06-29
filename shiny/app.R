@@ -1,0 +1,378 @@
+library(shiny)
+library(bslib)
+library(DT)
+library(shinyjs)
+library(shinycssloaders)
+library(dplyr)
+library(readr)
+library(geodeterminants)
+library(tidycensus)
+
+# --- Census code lookup: human-readable label -> ACS/DHC/SF1 codes ---
+GROUP_CODES <- list(
+  "White alone (non-Hispanic/Latino)"    = list(acs = "B03002_003", dhc = "P5_003N", sf1 = "P005003"),
+  "Black or African American alone"      = list(acs = "B03002_004", dhc = "P5_004N", sf1 = "P005004"),
+  "American Indian / Alaska Native"      = list(acs = "B03002_005", dhc = "P5_005N", sf1 = "P005005"),
+  "Asian alone"                          = list(acs = "B03002_006", dhc = "P5_006N", sf1 = "P005006"),
+  "Native Hawaiian / Pacific Islander"   = list(acs = "B03002_007", dhc = "P5_007N", sf1 = "P005007"),
+  "Hispanic or Latino (any race)"        = list(acs = "B03002_012", dhc = "P5_010N", sf1 = "P005010")
+)
+
+SDOH_MODULES <- c(
+  "Air Quality Index (EPA)",
+  "Concentrated Poverty",
+  "Education Attainment",
+  "Environmental Justice Index (EPA EJSCREEN)",
+  "Retail Food Environment Index (Food Swamp)",
+  "Income Concentration at Extremes (ICE)",
+  "Minimum Wage",
+  "Percent Unionized Workforce",
+  "Race/Ethnic Dissimilarity Index",
+  "Race/Ethnic Separation Index",
+  "Decennial Dissimilarity Index",
+  "Social Vulnerability Index (CDC)"
+)
+
+KEY_FILE <- "/srv/geodeterminants/api_key.rds"
+SAMPLE_CSV <- "/srv/geodeterminants/sample_addresses.csv"
+# Copy sample CSV from app bundle to persistent volume on startup
+if (!file.exists(SAMPLE_CSV)) {
+  dir.create(dirname(SAMPLE_CSV), recursive = TRUE, showWarnings = FALSE)
+  sample_src <- file.path(dirname(sys.frame(1)$ofile %||% "."), "sample_addresses.csv")
+  if (!file.exists(sample_src)) sample_src <- "sample_addresses.csv"
+  if (file.exists(sample_src)) file.copy(sample_src, SAMPLE_CSV)
+}
+
+load_api_key <- function() {
+  if (file.exists(KEY_FILE)) tryCatch(readRDS(KEY_FILE), error = function(e) "") else ""
+}
+
+save_api_key <- function(key) {
+  dir.create(dirname(KEY_FILE), recursive = TRUE, showWarnings = FALSE)
+  saveRDS(key, KEY_FILE)
+}
+
+# --- UI ---
+ui <- page_sidebar(
+  title = tags$span(
+    style = "font-weight: 600; letter-spacing: -0.5px;",
+    "Geodeterminants"
+  ),
+  theme = bs_theme(
+    bootswatch   = "flatly",
+    primary      = "#2563EB",
+    base_font    = font_google("Inter"),
+    heading_font = font_google("Inter")
+  ),
+  useShinyjs(),
+
+  sidebar = sidebar(
+    width = 340,
+
+    h6("1. Upload your data", class = "text-muted text-uppercase fw-semibold mt-1 mb-2"),
+    fileInput("file", NULL, accept = ".csv",
+              buttonLabel = "Choose CSV...",
+              placeholder = "No file selected"),
+    downloadLink("download_example", icon("download"), " Download example CSV",
+                 style = "font-size: 0.85em;"),
+
+    hr(style = "margin: 10px 0;"),
+    h6("2. Map your columns", class = "text-muted text-uppercase fw-semibold mb-2"),
+    uiOutput("col_mapping"),
+
+    hr(style = "margin: 10px 0;"),
+    h6("3. Population group of interest", class = "text-muted text-uppercase fw-semibold mb-2"),
+    selectInput("minority_group", "Group of interest",
+                choices = names(GROUP_CODES),
+                selected = "Black or African American alone"),
+    selectInput("comparison_group", "Comparison group",
+                choices = names(GROUP_CODES),
+                selected = "White alone (non-Hispanic/Latino)"),
+
+    hr(style = "margin: 10px 0;"),
+    h6("4. Data parameters", class = "text-muted text-uppercase fw-semibold mb-2"),
+    numericInput("current_year", "Data year",
+                 value = as.integer(format(Sys.Date(), "%Y")),
+                 min = 2010, max = 2030, step = 1),
+    numericInput("fed_min_wage", "Federal minimum wage ($)",
+                 value = 7.25, min = 0, step = 0.01),
+
+    hr(style = "margin: 10px 0;"),
+    h6("5. Census API key", class = "text-muted text-uppercase fw-semibold mb-2"),
+    passwordInput("api_key", NULL,
+                  value    = load_api_key(),
+                  placeholder = "Paste your Census API key"),
+    tags$small(
+      tags$a("Get a free key at api.census.gov",
+             href   = "https://api.census.gov/data/key_signup.html",
+             target = "_blank"),
+      " (free, takes ~1 minute)"
+    ),
+    checkboxInput("save_key", "Remember key for future sessions", value = TRUE),
+
+    hr(style = "margin: 10px 0;"),
+    actionButton("run", "Analyze Addresses",
+                 class = "btn btn-primary btn-lg w-100",
+                 icon  = icon("play"))
+  ),
+
+  uiOutput("main_content")
+)
+
+# --- Server ---
+server <- function(input, output, session) {
+
+  results <- reactiveVal(NULL)
+
+  # Uploaded data
+  data <- reactive({
+    req(input$file)
+    tryCatch(
+      read_csv(input$file$datapath, show_col_types = FALSE),
+      error = function(e) {
+        showNotification(
+          "Could not read that file. Please upload a CSV (.csv) file.",
+          type = "error", duration = 8
+        )
+        NULL
+      }
+    )
+  })
+
+  # Column mapping UI — rendered after upload
+  output$col_mapping <- renderUI({
+    df <- data()
+    if (is.null(df)) {
+      return(tags$p(tags$em("Upload a CSV file above to map columns."),
+                    class = "text-muted", style = "font-size: 0.85em;"))
+    }
+    cols <- names(df)
+    # Smart auto-detection
+    addr_idx  <- grep("^address$|^addr$|street|full.?addr", cols, ignore.case = TRUE)[1]
+    state_idx <- grep("^state$|^st$", cols, ignore.case = TRUE)[1]
+    year_idx  <- grep("^year$|^yr$|date", cols, ignore.case = TRUE)[1]
+
+    tagList(
+      selectInput("col_address", "Address column", choices = cols,
+                  selected = if (!is.na(addr_idx)) cols[addr_idx] else cols[1]),
+      selectInput("col_state", "State column",
+                  choices  = c("(none — state included in address)" = "_none_", cols),
+                  selected = if (!is.na(state_idx)) cols[state_idx] else "_none_"),
+      selectInput("col_year", "Year column",
+                  choices  = c("(use default: current year - 2)" = "_none_", cols),
+                  selected = if (!is.na(year_idx)) cols[year_idx] else "_none_")
+    )
+  })
+
+  # Main content area
+  output$main_content <- renderUI({
+    if (is.null(data())) {
+      # Welcome state
+      card(
+        card_header(
+          class = "bg-primary text-white",
+          tags$h5("Social Determinants of Health Enrichment", class = "mb-0")
+        ),
+        card_body(
+          tags$p(
+            "This tool takes a list of addresses and appends social and environmental ",
+            "data for each location — no programming required. ",
+            "Upload your CSV on the left to get started."
+          ),
+          tags$p(tags$strong("What you get back (12 data modules):")),
+          tags$ul(
+            lapply(SDOH_MODULES, tags$li)
+          ),
+          tags$hr(),
+          tags$p(
+            tags$strong("Input format: "),
+            "A CSV file with a column for address, and optionally state and year. ",
+            tags$a("Download an example CSV", href = "#", id = "example-link"),
+            " to see the format."
+          ),
+          tags$script(
+            "document.getElementById('example-link').addEventListener('click', function(e) {
+               e.preventDefault();
+               Shiny.setInputValue('trigger_example_download', Math.random());
+            });"
+          )
+        )
+      )
+    } else if (!is.null(results())) {
+      # Results state
+      card(
+        card_header(
+          class = "d-flex justify-content-between align-items-center",
+          tags$span(
+            icon("circle-check", style = "color: #22c55e; margin-right: 6px;"),
+            paste0("Results — ", nrow(results()), " addresses enriched")
+          ),
+          downloadButton("download_results", "Download CSV",
+                         class = "btn-success btn-sm")
+        ),
+        card_body(
+          style = "padding: 0;",
+          withSpinner(
+            DTOutput("results_table"),
+            color = "#2563EB"
+          )
+        )
+      )
+    } else {
+      # Preview state (file loaded, not yet run)
+      card(
+        card_header(
+          paste0("Uploaded: ", input$file$name,
+                 " — ", nrow(data()), " rows, ", ncol(data()), " columns")
+        ),
+        card_body(
+          tags$p(
+            "Map the columns on the left, then click ",
+            tags$strong("Analyze Addresses"), "."
+          ),
+          withSpinner(
+            DTOutput("preview_table"),
+            color = "#2563EB"
+          )
+        )
+      )
+    }
+  })
+
+  output$preview_table <- renderDT({
+    req(data())
+    datatable(head(data(), 10),
+              options  = list(pageLength = 5, scrollX = TRUE, dom = "tp"),
+              rownames = FALSE)
+  })
+
+  output$results_table <- renderDT({
+    req(results())
+    datatable(results(),
+              options  = list(pageLength = 10, scrollX = TRUE, dom = "Bfrtip"),
+              rownames = FALSE,
+              extensions = "Buttons")
+  })
+
+  # Run analysis
+  observeEvent(input$run, {
+    df <- data()
+
+    if (is.null(df)) {
+      showNotification("Please upload a CSV file first.", type = "warning")
+      return()
+    }
+    if (nchar(trimws(input$api_key)) == 0) {
+      showNotification(
+        "Please enter your Census API key (step 5 on the left).",
+        type = "warning", duration = 8
+      )
+      return()
+    }
+
+    # Save key if requested (do before run so it persists even if run fails)
+    if (input$save_key) {
+      tryCatch(save_api_key(trimws(input$api_key)), error = function(e) NULL)
+    }
+
+    # Set Census key in environment
+    tryCatch(
+      tidycensus::census_api_key(trimws(input$api_key), install = FALSE, overwrite = TRUE),
+      error = function(e) Sys.setenv(CENSUS_API_KEY = trimws(input$api_key))
+    )
+
+    withProgress(message = "Analyzing addresses...", value = 0, {
+
+      incProgress(0.05, detail = "Reading your data...")
+
+      tib <- df
+
+      # Rename to package-expected column names
+      if (!is.null(input$col_address) && input$col_address != "address") {
+        tib <- tib %>% rename(address = !!sym(input$col_address))
+      }
+      if (!is.null(input$col_state) && input$col_state != "_none_" &&
+          input$col_state != "address") {
+        if (input$col_state != "state") {
+          tib <- tib %>% rename(state = !!sym(input$col_state))
+        }
+      } else if (!"state" %in% names(tib)) {
+        tib$state <- NA_character_
+      }
+      if (!is.null(input$col_year) && input$col_year != "_none_") {
+        if (input$col_year != "year") {
+          tib <- tib %>% rename(year = !!sym(input$col_year))
+        }
+        tib$year <- suppressWarnings(as.integer(tib$year))
+      } else if (!"year" %in% names(tib)) {
+        tib$year <- as.integer(input$current_year) - 2L
+      }
+
+      incProgress(0.1, detail = "Geocoding addresses...")
+
+      minority   <- GROUP_CODES[[input$minority_group]]
+      comparison <- GROUP_CODES[[input$comparison_group]]
+
+      result <- tryCatch({
+        incProgress(0, detail = "Fetching Census and EPA data (this may take a minute)...")
+        res <- geodeterminants::get_geodeterminants(
+          gd_tib                    = tib,
+          gd_addresses              = NULL,
+          gd_current_year           = as.integer(input$current_year),
+          gd_minority_group_code    = minority$acs,
+          gd_comparison_group_code  = comparison$acs,
+          gd_minority_group_code_dhc = minority$dhc,
+          gd_minority_group_code_sf1 = minority$sf1,
+          gd_current_fed_min_wage   = as.numeric(input$fed_min_wage)
+        )
+        incProgress(0.8, detail = "Finalizing results...")
+        res
+      }, error = function(e) {
+        msg <- conditionMessage(e)
+        friendly <- if (grepl("API key|census_api_key|Unauthorized|401", msg, ignore.case = TRUE)) {
+          "Census API key not recognized. Please check your key at api.census.gov."
+        } else if (grepl("geocod|nominatim|no results|lat|lon", msg, ignore.case = TRUE)) {
+          paste0(
+            "Geocoding failed for one or more addresses. ",
+            "Check that addresses include a city and state."
+          )
+        } else if (grepl("internet|connection|timeout|curl", msg, ignore.case = TRUE)) {
+          "Network error. Please check your internet connection and try again."
+        } else {
+          paste0("Analysis error: ", substr(msg, 1, 120))
+        }
+        showNotification(friendly, type = "error", duration = 12)
+        NULL
+      })
+
+      incProgress(1.0, detail = "Done!")
+      results(result)
+    })
+  })
+
+  # Download results
+  output$download_results <- downloadHandler(
+    filename = function() {
+      paste0("geodeterminants_results_", Sys.Date(), ".csv")
+    },
+    content = function(file) {
+      write_csv(results(), file)
+    }
+  )
+
+  # Download example CSV
+  output$download_example <- downloadHandler(
+    filename = "sample_addresses.csv",
+    content = function(file) {
+      src <- if (file.exists(SAMPLE_CSV)) SAMPLE_CSV else "sample_addresses.csv"
+      file.copy(src, file)
+    }
+  )
+
+  # Also wire the inline "Download an example CSV" link in the welcome card
+  observeEvent(input$trigger_example_download, {
+    session$sendCustomMessage("triggerDownload", "download_example")
+  })
+}
+
+shinyApp(ui, server)

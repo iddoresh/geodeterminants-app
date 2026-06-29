@@ -1,0 +1,12 @@
+services:
+  geodeterminants:
+    build: .
+    image: geodeterminants-app
+    ports:
+      - "3838:3838"
+    volumes:
+      - geodeterminants-data:/srv/geodeterminants
+    restart: unless-stopped
+
+volumes:
+  geodeterminants-data:
