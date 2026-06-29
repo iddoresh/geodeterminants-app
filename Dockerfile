@@ -1,6 +1,9 @@
 FROM rocker/shiny:4.4.2
 
-# System deps for sf, tigris, tidygeocoder
+# Use Posit Package Manager for pre-compiled Ubuntu binaries (~3-5 min build vs 20-40 min source)
+ENV RENV_CONFIG_REPOS_OVERRIDE="https://packagemanager.posit.co/cran/__linux__/jammy/latest"
+
+# System deps required by sf, tigris, tidygeocoder
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgdal-dev \
     libgeos-dev \
@@ -18,11 +21,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pak for faster parallel package installs
-RUN Rscript -e "install.packages('pak', repos = 'https://r-lib.github.io/p/pak/stable/')"
-
-# Install all R dependencies
-RUN Rscript -e "pak::pak(c( \
+# Install all R dependencies from binary repo (fast)
+RUN Rscript -e "install.packages(c( \
+    'pak', \
     'tidyverse', \
     'tibble', \
     'tidygeocoder', \
@@ -36,19 +37,20 @@ RUN Rscript -e "pak::pak(c( \
     'shinyjs', \
     'shinycssloaders', \
     'dplyr', \
-    'readr' \
-))"
+    'readr', \
+    'remotes' \
+  ), repos = 'https://packagemanager.posit.co/cran/__linux__/jammy/latest')"
 
 # Install geodeterminants from GitHub
-RUN Rscript -e "pak::pak('wchan05/geodeterminants')"
+RUN Rscript -e "remotes::install_github('wchan05/geodeterminants')"
 
 # Copy Shiny app
 COPY shiny/ /srv/shiny-server/geodeterminants/
 
-# Persistent data dir (API key + outputs)
+# Data dir for local-mode API key persistence (ignored on hosted deployments)
 RUN mkdir -p /srv/geodeterminants && chmod 777 /srv/geodeterminants
 
-# Shiny server config: single-app mode on root path
+# Shiny server config: serve on root path
 RUN printf 'run_as shiny;\nserver {\n  listen 3838;\n  location / {\n    site_dir /srv/shiny-server/geodeterminants;\n    log_dir /var/log/shiny-server;\n    directory_index off;\n  }\n}\n' \
     > /etc/shiny-server/shiny-server.conf
 

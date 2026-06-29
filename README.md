@@ -6,6 +6,30 @@ Built on the [geodeterminants](https://github.com/wchan05/geodeterminants) R pac
 
 ---
 
+## Using the hosted app
+
+If someone has already deployed this for you, just open the URL they shared. No installation needed — upload your CSV and click Analyze.
+
+---
+
+## Deploying your own instance (one-time setup, ~10 minutes)
+
+The easiest way to host this yourself is **Render.com** — free tier, auto-deploys from GitHub.
+
+**Step 1** — Create a free account at [render.com](https://render.com) and connect your GitHub account.
+
+**Step 2** — Click **New → Web Service**, select the `geodeterminants-app` repository, and click **Create Web Service**. Render detects the Dockerfile automatically.
+
+**Step 3** — In the service settings under **Environment**, add one variable:
+- Key: `CENSUS_API_KEY`
+- Value: your Census API key (get one free at [api.census.gov/data/key_signup.html](https://api.census.gov/data/key_signup.html))
+
+Click **Save Changes** — the app redeploys with the key configured. Your URL (`https://geodeterminants-app.onrender.com` or similar) is now live and shareable.
+
+> **Note on free tier:** The app sleeps after 15 minutes of inactivity. The first visit after sleeping takes about 30 seconds to wake up. Upgrade to Render's Starter plan ($7/month) to keep it always-on.
+
+---
+
 ## What you get
 
 For each address, the tool appends:

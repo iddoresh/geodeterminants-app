@@ -33,23 +33,23 @@ SDOH_MODULES <- c(
   "Social Vulnerability Index (CDC)"
 )
 
-KEY_FILE <- "/srv/geodeterminants/api_key.rds"
-SAMPLE_CSV <- "/srv/geodeterminants/sample_addresses.csv"
-# Copy sample CSV from app bundle to persistent volume on startup
-if (!file.exists(SAMPLE_CSV)) {
-  dir.create(dirname(SAMPLE_CSV), recursive = TRUE, showWarnings = FALSE)
-  sample_src <- file.path(dirname(sys.frame(1)$ofile %||% "."), "sample_addresses.csv")
-  if (!file.exists(sample_src)) sample_src <- "sample_addresses.csv"
-  if (file.exists(sample_src)) file.copy(sample_src, SAMPLE_CSV)
-}
+KEY_FILE  <- "/srv/geodeterminants/api_key.rds"
+SAMPLE_CSV <- "sample_addresses.csv"  # bundled alongside app.R
+
+# If CENSUS_API_KEY is set as an environment variable (Render, Railway, etc.)
+# the app uses it automatically and hides the key input from users.
+ENV_API_KEY <- Sys.getenv("CENSUS_API_KEY", unset = "")
+HOSTED_MODE <- nchar(ENV_API_KEY) > 0
 
 load_api_key <- function() {
+  if (HOSTED_MODE) return(ENV_API_KEY)
   if (file.exists(KEY_FILE)) tryCatch(readRDS(KEY_FILE), error = function(e) "") else ""
 }
 
 save_api_key <- function(key) {
+  if (HOSTED_MODE) return(invisible(NULL))  # never write to disk in hosted mode
   dir.create(dirname(KEY_FILE), recursive = TRUE, showWarnings = FALSE)
-  saveRDS(key, KEY_FILE)
+  tryCatch(saveRDS(key, KEY_FILE), error = function(e) NULL)
 }
 
 # --- UI ---
@@ -98,17 +98,27 @@ ui <- page_sidebar(
                  value = 7.25, min = 0, step = 0.01),
 
     hr(style = "margin: 10px 0;"),
-    h6("5. Census API key", class = "text-muted text-uppercase fw-semibold mb-2"),
-    passwordInput("api_key", NULL,
-                  value    = load_api_key(),
-                  placeholder = "Paste your Census API key"),
-    tags$small(
-      tags$a("Get a free key at api.census.gov",
-             href   = "https://api.census.gov/data/key_signup.html",
-             target = "_blank"),
-      " (free, takes ~1 minute)"
-    ),
-    checkboxInput("save_key", "Remember key for future sessions", value = TRUE),
+    if (HOSTED_MODE) {
+      tags$p(
+        icon("circle-check", style = "color: #22c55e; margin-right: 4px;"),
+        tags$small("Census API key configured"),
+        class = "text-muted mb-2"
+      )
+    } else {
+      tagList(
+        h6("5. Census API key", class = "text-muted text-uppercase fw-semibold mb-2"),
+        passwordInput("api_key", NULL,
+                      value       = load_api_key(),
+                      placeholder = "Paste your Census API key"),
+        tags$small(
+          tags$a("Get a free key at api.census.gov",
+                 href   = "https://api.census.gov/data/key_signup.html",
+                 target = "_blank"),
+          " (free, takes ~1 minute)"
+        ),
+        checkboxInput("save_key", "Remember key for future sessions", value = TRUE)
+      )
+    },
 
     hr(style = "margin: 10px 0;"),
     actionButton("run", "Analyze Addresses",
@@ -262,7 +272,9 @@ server <- function(input, output, session) {
       showNotification("Please upload a CSV file first.", type = "warning")
       return()
     }
-    if (nchar(trimws(input$api_key)) == 0) {
+    active_key <- if (HOSTED_MODE) ENV_API_KEY else trimws(input$api_key)
+
+    if (nchar(active_key) == 0) {
       showNotification(
         "Please enter your Census API key (step 5 on the left).",
         type = "warning", duration = 8
@@ -270,15 +282,13 @@ server <- function(input, output, session) {
       return()
     }
 
-    # Save key if requested (do before run so it persists even if run fails)
-    if (input$save_key) {
-      tryCatch(save_api_key(trimws(input$api_key)), error = function(e) NULL)
+    if (!HOSTED_MODE && isTRUE(input$save_key)) {
+      tryCatch(save_api_key(active_key), error = function(e) NULL)
     }
 
-    # Set Census key in environment
     tryCatch(
-      tidycensus::census_api_key(trimws(input$api_key), install = FALSE, overwrite = TRUE),
-      error = function(e) Sys.setenv(CENSUS_API_KEY = trimws(input$api_key))
+      tidycensus::census_api_key(active_key, install = FALSE, overwrite = TRUE),
+      error = function(e) Sys.setenv(CENSUS_API_KEY = active_key)
     )
 
     withProgress(message = "Analyzing addresses...", value = 0, {
