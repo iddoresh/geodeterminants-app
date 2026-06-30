@@ -41,9 +41,9 @@ RUN Rscript -e "\
 # Data dir for local-mode API key persistence (not used in hosted deployments)
 RUN mkdir -p /srv/geodeterminants && chmod 777 /srv/geodeterminants
 
-RUN printf 'server {\n  listen 3838;\n  location / {\n    site_dir /srv/shiny-server/geodeterminants;\n    log_dir /var/log/shiny-server;\n    directory_index off;\n  }\n}\n' \
+RUN printf 'server {\n  listen 10000;\n  location / {\n    site_dir /srv/shiny-server/geodeterminants;\n    log_dir /var/log/shiny-server;\n    directory_index off;\n  }\n}\n' \
     > /etc/shiny-server/shiny-server.conf
 
-EXPOSE 3838
+EXPOSE 10000
 
 CMD ["/usr/bin/shiny-server"]

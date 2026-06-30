@@ -10,5 +10,3 @@ services:
     envVars:
       - key: CENSUS_API_KEY
         sync: false
-      - key: PORT
-        value: "3838"
