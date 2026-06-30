@@ -8,7 +8,7 @@ Built on the [geodeterminants](https://github.com/wchan05/geodeterminants) R pac
 
 ## Using the hosted app
 
-If someone has already deployed this for you, just open the URL they shared. No installation needed — upload your CSV and click Analyze.
+If someone has already deployed this for you, just open the URL they shared. No installation needed — type or paste your addresses, fill in the settings, and click Analyze.
 
 ---
 
@@ -71,11 +71,25 @@ The first run downloads all dependencies (~5-10 minutes). After that, subsequent
 
 **Step 3 — Use the app**
 
-Your browser will open to `http://localhost:3838`. Paste your Census API key when prompted, upload your CSV, and click Analyze.
+Your browser will open to `http://localhost:3838`. Paste your Census API key, enter your addresses (type/paste or upload a CSV), and click Analyze.
 
 ---
 
 ## Input format
+
+**Option A — Type or paste (easiest)**
+
+In the app, select "Type or paste" and enter one address per line:
+
+```
+15 Main Street, Flemington, NJ 08822
+401 W 14th St, Austin, TX 78701
+1600 Pennsylvania Ave NW, Washington, DC 20500
+```
+
+Include city and state in each line for best geocoding results.
+
+**Option B — Upload a CSV**
 
 Your CSV must have at minimum an address column. The tool auto-detects column names, or you can map them manually in the interface.
 
@@ -108,24 +122,25 @@ docker compose up -d
 ```
 +------------------------------------------+-------------------------------------+
 |  Geodeterminants                         |                                     |
-|  Social Determinants of Health           |  Welcome to Geodeterminants         |
+|  Social Determinants of Health           |  Social Determinants of Health      |
+|                                          |  Enrichment                         |
+|  1. Enter addresses                      |                                     |
+|  ( ) Type or paste   ( ) Upload CSV      |  Two ways to provide addresses:     |
+|                                          |  - Type or paste: one per line      |
+|  [15 Main St, Flemington, NJ 08822    ]  |  - Upload CSV: spreadsheet format   |
+|  [401 W 14th St, Austin, TX 78701     ]  |                                     |
+|  [                                    ]  |  What you get back (12 modules):    |
+|                                          |  - Air Quality Index                |
+|  2. Population group of interest         |  - Concentrated Poverty             |
+|  Group:    [Black or Afr. American v]    |  - Education Attainment             |
+|  Compare:  [White alone (non-Hisp) v]    |  - ... (12 total)                   |
 |                                          |                                     |
-|  1. Upload your data                     |  Upload a CSV of addresses on the   |
-|  [Choose CSV file]  [Example CSV]        |  left to get started. You will get  |
-|                                          |  back a CSV with 12 SDOH columns    |
-|  2. Map your columns                     |  appended for each address.         |
-|  Address:  [address   v]                 |                                     |
-|  State:    [state     v]                 |  You will receive:                  |
-|  Year:     [year      v]                 |  - Air Quality Index                |
-|                                          |  - Concentrated Poverty             |
-|  3. Population group of interest         |  - Education Attainment             |
-|  Group:    [Black or Afr. American v]    |  - ... (12 total)                   |
-|  Compare:  [White alone (non-Hisp) v]    |                                     |
+|  3. Parameters                           |                                     |
+|  Year:  [2024]   Min wage: [$7.25]       |                                     |
 |                                          |                                     |
 |  4. Census API key                       |                                     |
 |  [********************]                  |                                     |
 |  [x] Remember key                        |                                     |
-|  Get a free key at api.census.gov        |                                     |
 |                                          |                                     |
 |  [  Analyze Addresses  ]                 |                                     |
 +------------------------------------------+-------------------------------------+

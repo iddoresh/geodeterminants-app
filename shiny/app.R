@@ -281,6 +281,7 @@ server <- function(input, output, session) {
     address_vector <- NULL
     if (input$input_mode == "paste") {
       raw <- if (is.null(input$address_text)) "" else input$address_text
+      raw <- gsub("\r", "", raw)
       lines <- trimws(unlist(strsplit(raw, "\n")))
       address_vector <- lines[nchar(lines) > 0]
       if (length(address_vector) == 0) {
