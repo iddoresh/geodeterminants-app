@@ -24,25 +24,21 @@ COPY shiny/ /srv/shiny-server/geodeterminants/
 
 # Download supplemental datasets (AQI, RFEI, EJ Index, pct_unionized modules)
 # Fails gracefully — those 4 modules unavailable if download fails, other 8 still work
-RUN Rscript -e "
-  tryCatch({
-    url <- 'https://drive.usercontent.google.com/download?id=1OMHsyaFPNGa8Vu68rrrLKSg1Gqu94Prb&export=download&confirm=t'
-    dest <- '/tmp/geo_datasets.zip'
-    download.file(url, dest, quiet=TRUE, method='libcurl')
-    unzip(dest, exdir='/srv/shiny-server/geodeterminants', overwrite=TRUE)
-    # Package README says 'datasets' but R code reads from 'geodeterminants_datasets'
-    if (!dir.exists('/srv/shiny-server/geodeterminants/geodeterminants_datasets') &&
-        dir.exists('/srv/shiny-server/geodeterminants/datasets')) {
-      file.rename('/srv/shiny-server/geodeterminants/datasets',
-                  '/srv/shiny-server/geodeterminants/geodeterminants_datasets')
-    }
-    file.remove(dest)
-    cat('[OK] geodeterminants_datasets downloaded\n')
-  }, error=function(e) {
-    cat('[WARN] dataset download failed:', conditionMessage(e), '\n')
-    cat('[WARN] AQI, RFEI, EJ Index, pct_unionized modules will not run\n')
-  })
-"
+RUN Rscript -e "\
+  tryCatch({ \
+    url <- 'https://drive.usercontent.google.com/download?id=1OMHsyaFPNGa8Vu68rrrLKSg1Gqu94Prb&export=download&confirm=t'; \
+    dest <- '/tmp/gd.zip'; \
+    download.file(url, dest, quiet=TRUE, method='libcurl'); \
+    unzip(dest, exdir='/srv/shiny-server/geodeterminants', overwrite=TRUE); \
+    d <- '/srv/shiny-server/geodeterminants'; \
+    if (!dir.exists(file.path(d,'geodeterminants_datasets')) && dir.exists(file.path(d,'datasets'))) \
+      file.rename(file.path(d,'datasets'), file.path(d,'geodeterminants_datasets')); \
+    file.remove(dest); \
+    cat('[OK] geodeterminants_datasets downloaded\n') \
+  }, error=function(e) { \
+    cat('[WARN] dataset download failed:', conditionMessage(e), '\n'); \
+    cat('[WARN] AQI, RFEI, EJ Index, pct_unionized modules will not run\n') \
+  })"
 
 # Data dir for local-mode API key persistence (not used in hosted deployments)
 RUN mkdir -p /srv/geodeterminants && chmod 777 /srv/geodeterminants
