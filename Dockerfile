@@ -5,9 +5,7 @@ FROM rocker/geospatial:4.4.2
 # Copy shiny-server from the official shiny image
 COPY --from=shiny_stage /opt/shiny-server /opt/shiny-server
 RUN ln -sf /opt/shiny-server/bin/shiny-server /usr/bin/shiny-server \
-    && useradd -r -m shiny 2>/dev/null || true \
-    && mkdir -p /var/log/shiny-server /srv/shiny-server /etc/shiny-server /var/lib/shiny-server/bookmarks \
-    && chown -R shiny /var/log/shiny-server /var/lib/shiny-server
+    && mkdir -p /var/log/shiny-server /srv/shiny-server /etc/shiny-server /var/lib/shiny-server/bookmarks
 
 # Install remaining packages from GitHub (CRAN blocked in sandbox; remotes pre-installed in geospatial)
 # Dependencies for all packages are already present in rocker/geospatial
@@ -43,7 +41,7 @@ RUN Rscript -e "\
 # Data dir for local-mode API key persistence (not used in hosted deployments)
 RUN mkdir -p /srv/geodeterminants && chmod 777 /srv/geodeterminants
 
-RUN printf 'run_as shiny;\nserver {\n  listen 3838;\n  location / {\n    site_dir /srv/shiny-server/geodeterminants;\n    log_dir /var/log/shiny-server;\n    directory_index off;\n  }\n}\n' \
+RUN printf 'server {\n  listen 3838;\n  location / {\n    site_dir /srv/shiny-server/geodeterminants;\n    log_dir /var/log/shiny-server;\n    directory_index off;\n  }\n}\n' \
     > /etc/shiny-server/shiny-server.conf
 
 EXPOSE 3838
