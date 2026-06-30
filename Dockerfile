@@ -1,57 +1,30 @@
-FROM rocker/shiny:4.4.2
+FROM rocker/shiny:4.4.2 AS shiny_stage
 
-# Use Posit Package Manager for pre-compiled Ubuntu binaries (~3-5 min build vs 20-40 min source)
-# rocker/shiny:4.4.2 is based on Ubuntu 24.04 (Noble)
-ENV RENV_CONFIG_REPOS_OVERRIDE="https://packagemanager.posit.co/cran/__linux__/noble/latest"
+FROM rocker/geospatial:4.4.2
 
-# System deps required by sf, tigris, tidygeocoder
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgdal-dev \
-    libgeos-dev \
-    libproj-dev \
-    libudunits2-dev \
-    libssl-dev \
-    libcurl4-openssl-dev \
-    libxml2-dev \
-    libfontconfig1-dev \
-    libharfbuzz-dev \
-    libfribidi-dev \
-    libfreetype6-dev \
-    libpng-dev \
-    libtiff5-dev \
-    libjpeg-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Copy shiny-server from the official shiny image
+COPY --from=shiny_stage /opt/shiny-server /opt/shiny-server
+RUN ln -sf /opt/shiny-server/bin/shiny-server /usr/bin/shiny-server \
+    && useradd -r -m shiny 2>/dev/null || true \
+    && mkdir -p /var/log/shiny-server /srv/shiny-server /etc/shiny-server /var/lib/shiny-server/bookmarks \
+    && chown -R shiny /var/log/shiny-server /var/lib/shiny-server
 
-# Install all R dependencies from binary repo (fast)
-RUN Rscript -e "install.packages(c( \
-    'pak', \
-    'tidyverse', \
-    'tibble', \
-    'tidygeocoder', \
-    'tidycensus', \
-    'tigris', \
-    'sf', \
-    'readxl', \
-    'shiny', \
-    'bslib', \
-    'DT', \
-    'shinyjs', \
-    'shinycssloaders', \
-    'dplyr', \
-    'readr', \
-    'remotes' \
-  ), repos = 'https://packagemanager.posit.co/cran/__linux__/noble/latest')"
+# Install remaining packages from GitHub (CRAN blocked in sandbox; remotes pre-installed in geospatial)
+# Dependencies for all packages are already present in rocker/geospatial
+RUN Rscript -e "\
+  remotes::install_github('rstudio/DT', dependencies=FALSE, upgrade='never'); \
+  remotes::install_github('daattali/shinyjs', dependencies=FALSE, upgrade='never'); \
+  remotes::install_github('daattali/shinycssloaders', dependencies=FALSE, upgrade='never'); \
+  remotes::install_github('walkerke/tigris', dependencies=FALSE, upgrade='never'); \
+  remotes::install_github('jessecambon/tidygeocoder', dependencies=FALSE, upgrade='never'); \
+  remotes::install_github('walkerke/tidycensus', dependencies=FALSE, upgrade='never'); \
+  remotes::install_github('wchan05/geodeterminants', dependencies=FALSE, upgrade='never')"
 
-# Install geodeterminants from GitHub via pak (already installed above)
-RUN Rscript -e "pak::pak('wchan05/geodeterminants')"
-
-# Copy Shiny app
 COPY shiny/ /srv/shiny-server/geodeterminants/
 
-# Data dir for local-mode API key persistence (ignored on hosted deployments)
+# Data dir for local-mode API key persistence (not used in hosted deployments)
 RUN mkdir -p /srv/geodeterminants && chmod 777 /srv/geodeterminants
 
-# Shiny server config: serve on root path
 RUN printf 'run_as shiny;\nserver {\n  listen 3838;\n  location / {\n    site_dir /srv/shiny-server/geodeterminants;\n    log_dir /var/log/shiny-server;\n    directory_index off;\n  }\n}\n' \
     > /etc/shiny-server/shiny-server.conf
 
