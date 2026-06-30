@@ -2,7 +2,9 @@ services:
   - type: web
     name: geodeterminants-app
     env: docker
-    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    branch: master
     healthCheckPath: /
     envVars:
       - key: CENSUS_API_KEY

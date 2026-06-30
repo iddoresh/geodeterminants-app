@@ -24,19 +24,19 @@ Render.com builds and runs the app using Docker. **Your PI never sees or interac
 
 This app uses geospatial R packages (sf, tigris) that require specific system libraries. Docker guarantees those libraries are present at the exact right version; this is the most reliable path.
 
-**Step 1** — Create a free account at [render.com](https://render.com) and connect your GitHub account.
+**Click to deploy:**
 
-**Step 2** — Click **New → Web Service**, select the `geodeterminants-app` repository. Render detects the Dockerfile automatically. Click **Create Web Service**.
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/iddoresh/geodeterminants-app)
 
-**Step 3** — In the service settings under **Environment**, add:
-- Key: `CENSUS_API_KEY`
-- Value: your Census API key (get one free at [api.census.gov/data/key_signup.html](https://api.census.gov/data/key_signup.html))
+That button opens Render's service wizard with this repo pre-filled. You will need:
 
-Click **Save Changes** — the app deploys automatically. Share the URL with your PI.
+1. A Render.com account (free to create at [render.com](https://render.com))
+2. A Census API key — get one free at [api.census.gov/data/key_signup.html](https://api.census.gov/data/key_signup.html) (enter your name and email, key arrives by email in minutes)
+3. When the wizard asks for `CENSUS_API_KEY`, paste your key
 
-> **Free tier:** The app sleeps after 15 minutes of inactivity. First visit after sleep takes ~30 seconds to wake up. Upgrade to the Starter plan ($7/month) to keep it always-on.
->
-> **Build time:** The first build takes 10–15 minutes. Subsequent deploys (after a git push) rebuild automatically and are faster.
+The first build takes 10–15 minutes (R packages compile). When it finishes, Render gives you a URL like `https://geodeterminants-app.onrender.com`. Share that with your PI — they open it in any browser, done.
+
+> **Note on the free tier:** Render discontinued free web services in late 2023. The Starter plan is $7/month and keeps the app always-on. If you want zero cost, use the shinyapps.io option below.
 
 ---
 
