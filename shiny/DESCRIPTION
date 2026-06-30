@@ -1,0 +1,19 @@
+Package: geodeterminants-app
+Type: Shiny
+Title: Geodeterminants SDOH Enrichment App
+Version: 1.0.0
+Imports:
+    shiny,
+    bslib,
+    DT,
+    shinyjs,
+    shinycssloaders,
+    dplyr,
+    readr,
+    tidycensus,
+    tidygeocoder,
+    sf,
+    tigris,
+    geodeterminants
+Remotes:
+    wchan05/geodeterminants
