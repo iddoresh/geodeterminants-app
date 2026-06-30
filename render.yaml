@@ -2,6 +2,7 @@ services:
   - type: web
     name: geodeterminants-app
     env: docker
+    plan: free
     dockerfilePath: ./Dockerfile
     dockerContext: .
     branch: master
