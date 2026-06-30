@@ -52,6 +52,8 @@ save_api_key <- function(key) {
 translate_error <- function(msg) {
   if (grepl("API key|census_api_key|Unauthorized|401", msg, ignore.case = TRUE)) {
     "Census API key not recognized. Please check your key at api.census.gov."
+  } else if (grepl("resolve host|could not resolve|couldn't resolve|No such host|network is unreachable|Name or service not known", msg, ignore.case = TRUE)) {
+    "Network error: could not reach the Census geocoding service. Check your internet connection and try again."
   } else if (grepl("geocod|nominatim|no results|lat|lon", msg, ignore.case = TRUE)) {
     "Geocoding failed for one or more addresses. Check that each address includes a city and state."
   } else if (grepl("internet|connection|timeout|curl", msg, ignore.case = TRUE)) {
