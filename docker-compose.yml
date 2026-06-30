@@ -4,6 +4,7 @@ services:
     image: geodeterminants-app
     ports:
       - "3838:3838"
+    env_file: .env
     volumes:
       - geodeterminants-data:/srv/geodeterminants
     restart: unless-stopped

@@ -1,7 +1,8 @@
 FROM rocker/shiny:4.4.2
 
 # Use Posit Package Manager for pre-compiled Ubuntu binaries (~3-5 min build vs 20-40 min source)
-ENV RENV_CONFIG_REPOS_OVERRIDE="https://packagemanager.posit.co/cran/__linux__/jammy/latest"
+# rocker/shiny:4.4.2 is based on Ubuntu 24.04 (Noble)
+ENV RENV_CONFIG_REPOS_OVERRIDE="https://packagemanager.posit.co/cran/__linux__/noble/latest"
 
 # System deps required by sf, tigris, tidygeocoder
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -39,10 +40,10 @@ RUN Rscript -e "install.packages(c( \
     'dplyr', \
     'readr', \
     'remotes' \
-  ), repos = 'https://packagemanager.posit.co/cran/__linux__/jammy/latest')"
+  ), repos = 'https://packagemanager.posit.co/cran/__linux__/noble/latest')"
 
-# Install geodeterminants from GitHub
-RUN Rscript -e "remotes::install_github('wchan05/geodeterminants')"
+# Install geodeterminants from GitHub via pak (already installed above)
+RUN Rscript -e "pak::pak('wchan05/geodeterminants')"
 
 # Copy Shiny app
 COPY shiny/ /srv/shiny-server/geodeterminants/
