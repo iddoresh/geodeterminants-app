@@ -6,7 +6,7 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     branch: master
-    healthCheckPath: /www/health.html
+    healthCheckPath: ""
     envVars:
       - key: CENSUS_API_KEY
         sync: false
